@@ -1,7 +1,4 @@
-# fmt: off
 import typing
-
-# fmt: on
 
 
 class Error(Exception):
@@ -22,69 +19,34 @@ class Invalid(Error):
 
     """
 
-    def __init__(
-        self,
-        message: str,
-        path: typing.Optional[typing.List[typing.Hashable]] = None,
-        error_message: typing.Optional[str] = None,
-        error_type: typing.Optional[str] = None,
-    ) -> None:
+    def __init__(self, message: str, path: typing.Optional[typing.List[
+        typing.Hashable]]=None, error_message: typing.Optional[str]=None,
+        error_type: typing.Optional[str]=None) ->None:
         Error.__init__(self, message)
         self._path = path or []
         self._error_message = error_message or message
         self.error_type = error_type
 
-    @property
-    def msg(self) -> str:
-        return self.args[0]
-
-    @property
-    def path(self) -> typing.List[typing.Hashable]:
-        return self._path
-
-    @property
-    def error_message(self) -> str:
-        return self._error_message
-
-    def __str__(self) -> str:
-        path = ' @ data[%s]' % ']['.join(map(repr, self.path)) if self.path else ''
+    def __str__(self) ->str:
+        path = ' @ data[%s]' % ']['.join(map(repr, self.path)
+            ) if self.path else ''
         output = Exception.__str__(self)
         if self.error_type:
             output += ' for ' + self.error_type
         return output + path
 
-    def prepend(self, path: typing.List[typing.Hashable]) -> None:
-        self._path = path + self.path
-
 
 class MultipleInvalid(Invalid):
-    def __init__(self, errors: typing.Optional[typing.List[Invalid]] = None) -> None:
+
+    def __init__(self, errors: typing.Optional[typing.List[Invalid]]=None
+        ) ->None:
         self.errors = errors[:] if errors else []
 
-    def __repr__(self) -> str:
+    def __repr__(self) ->str:
         return 'MultipleInvalid(%r)' % self.errors
 
-    @property
-    def msg(self) -> str:
-        return self.errors[0].msg
-
-    @property
-    def path(self) -> typing.List[typing.Hashable]:
-        return self.errors[0].path
-
-    @property
-    def error_message(self) -> str:
-        return self.errors[0].error_message
-
-    def add(self, error: Invalid) -> None:
-        self.errors.append(error)
-
-    def __str__(self) -> str:
+    def __str__(self) ->str:
         return str(self.errors[0])
-
-    def prepend(self, path: typing.List[typing.Hashable]) -> None:
-        for error in self.errors:
-            error.prepend(path)
 
 
 class RequiredFieldInvalid(Invalid):
@@ -209,11 +171,9 @@ class ExactSequenceInvalid(Invalid):
 
 class NotEnoughValid(Invalid):
     """The value did not pass enough validations."""
-
     pass
 
 
 class TooManyValid(Invalid):
     """The value passed more than expected validations."""
-
     pass
