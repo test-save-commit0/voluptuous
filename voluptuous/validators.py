@@ -41,7 +41,13 @@ def truth(f: typing.Callable) ->typing.Callable:
     >>> with raises(MultipleInvalid, 'not a valid value'):
     ...   validate('/notavaliddir')
     """
-    pass
+    @wraps(f)
+    def wrapper(v):
+        t = f(v)
+        if not t:
+            raise ValueError
+        return v
+    return wrapper
 
 
 class Coerce(object):
@@ -109,7 +115,7 @@ def IsTrue(v):
     ... except MultipleInvalid as e:
     ...   assert isinstance(e.errors[0], TrueInvalid)
     """
-    pass
+    return bool(v)
 
 
 @message('value was not false', cls=FalseInvalid)
@@ -129,7 +135,7 @@ def IsFalse(v):
     ... except MultipleInvalid as e:
     ...   assert isinstance(e.errors[0], FalseInvalid)
     """
-    pass
+    return not bool(v)
 
 
 @message('expected boolean', cls=BooleanInvalid)
@@ -153,7 +159,18 @@ def Boolean(v):
     ... except MultipleInvalid as e:
     ...   assert isinstance(e.errors[0], BooleanInvalid)
     """
-    pass
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, str):
+        v = v.lower()
+        if v in ('1', 'true', 'yes', 'on', 'enable'):
+            return True
+        if v in ('0', 'false', 'no', 'off', 'disable'):
+            return False
+    try:
+        return bool(v)
+    except ValueError:
+        raise BooleanInvalid('expected boolean')
 
 
 class _WithSubValidators(object):
@@ -894,7 +911,16 @@ class Number(object):
         :param number:
         :return: tuple(precision, scale, decimal_number)
         """
-        pass
+        try:
+            decimal_num = Decimal(number)
+        except InvalidOperation:
+            raise Invalid(self.msg or f'{number} is not a valid Decimal')
+
+        sign, digits, exponent = decimal_num.as_tuple()
+        scale = -exponent if exponent < 0 else 0
+        precision = len(digits)
+
+        return precision, scale, decimal_num
 
 
 class SomeOf(_WithSubValidators):
