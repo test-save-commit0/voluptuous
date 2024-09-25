@@ -146,7 +146,7 @@ class LiteralInvalid(Invalid):
 
 
 class LengthInvalid(Invalid):
-    pass
+    """The value has an invalid length."""
 
 
 class DatetimeInvalid(Invalid):
@@ -158,22 +158,28 @@ class DateInvalid(Invalid):
 
 
 class InInvalid(Invalid):
-    pass
+    """The value is not in the required collection."""
 
 
 class NotInInvalid(Invalid):
-    pass
+    """The value is in a collection it should not be in."""
 
 
 class ExactSequenceInvalid(Invalid):
-    pass
+    """The sequence does not match exactly."""
 
 
 class NotEnoughValid(Invalid):
     """The value did not pass enough validations."""
-    pass
+    def __init__(self, msg: str, min_valid: int, actual_valid: int, path: typing.Optional[typing.List[typing.Hashable]] = None):
+        super().__init__(msg, path)
+        self.min_valid = min_valid
+        self.actual_valid = actual_valid
 
 
 class TooManyValid(Invalid):
     """The value passed more than expected validations."""
-    pass
+    def __init__(self, msg: str, max_valid: int, actual_valid: int, path: typing.Optional[typing.List[typing.Hashable]] = None):
+        super().__init__(msg, path)
+        self.max_valid = max_valid
+        self.actual_valid = actual_valid
