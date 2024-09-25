@@ -113,7 +113,27 @@ class Schema(object):
 
         Note: only very basic inference is supported.
         """
-        pass
+        def infer_type(value):
+            if isinstance(value, dict):
+                return {k: infer_type(v) for k, v in value.items()}
+            elif isinstance(value, list):
+                if value:
+                    return [infer_type(value[0])]
+                else:
+                    return list
+            elif isinstance(value, str):
+                return str
+            elif isinstance(value, int):
+                return int
+            elif isinstance(value, float):
+                return float
+            elif isinstance(value, bool):
+                return bool
+            else:
+                return type(value)
+
+        inferred_schema = infer_type(data)
+        return cls(inferred_schema, **kwargs)
 
     def __eq__(self, other):
         if not isinstance(other, Schema):
@@ -142,7 +162,58 @@ class Schema(object):
 
     def _compile_mapping(self, schema, invalid_msg=None):
         """Create validator for given mapping."""
-        pass
+        def validate_mapping(path, iterable, value):
+            if not isinstance(value, dict):
+                raise er.Invalid(invalid_msg or 'expected a dictionary', path)
+
+            out = {}
+            required_keys = set()
+            optional_keys = set()
+            _compile = self._compile
+            error = er.MultipleInvalid()
+
+            for key, subschema in _iterate_mapping_candidates(schema):
+                if isinstance(key, Required):
+                    required_keys.add(key.schema)
+                elif isinstance(key, Optional):
+                    optional_keys.add(key.schema)
+                else:
+                    optional_keys.add(key)
+
+            for key, val in value.items():
+                key_path = path + [key]
+                for skey, svalue in _iterate_mapping_candidates(schema):
+                    if isinstance(skey, Optional):
+                        skey = skey.schema
+                    if isinstance(skey, Required):
+                        skey = skey.schema
+                    if skey == key:
+                        try:
+                            out[key] = _compile(svalue)(key_path, value, val)
+                            break
+                        except er.Invalid as e:
+                            error.add(e)
+                else:
+                    if self.extra == PREVENT_EXTRA:
+                        error.add(er.Invalid('extra keys not allowed', key_path))
+                    elif self.extra == ALLOW_EXTRA:
+                        out[key] = val
+                    elif self.extra == REMOVE_EXTRA:
+                        pass
+                    else:
+                        raise ValueError('Invalid value for extra')
+
+            missing_required_keys = required_keys - set(out.keys())
+            if missing_required_keys:
+                error.add(er.Invalid(f'required key(s) {", ".join(repr(k) for k in missing_required_keys)} not provided',
+                                     path))
+
+            if error.errors:
+                raise error
+
+            return out
+
+        return validate_mapping
 
     def _compile_object(self, schema):
         """Validate an object.
@@ -162,7 +233,26 @@ class Schema(object):
             ...   validate(Structure(one='three'))
 
         """
-        pass
+        base = self._compile_mapping(schema, invalid_msg='object value')
+
+        def validate_object(path, iterable, value):
+            if schema.cls is not UNDEFINED and not isinstance(value, schema.cls):
+                raise er.Invalid('expected {} but got {}'.format(schema.cls, type(value)), path)
+            
+            # Convert object attributes to a dictionary
+            value_dict = {k: getattr(value, k) for k in dir(value) if not k.startswith('_')}
+            
+            # Validate the dictionary
+            result_dict = base(path, iterable, value_dict)
+            
+            # Create a new object with validated attributes
+            validated_obj = schema.cls() if schema.cls is not UNDEFINED else type(value)()
+            for k, v in result_dict.items():
+                setattr(validated_obj, k, v)
+            
+            return validated_obj
+
+        return validate_object
 
     def _compile_dict(self, schema):
         """Validate a dictionary.
@@ -240,7 +330,7 @@ class Schema(object):
          "expected str for dictionary value @ data['adict']['strfield']"]
 
         """
-        pass
+        return self._compile_mapping(schema, invalid_msg='expected a dictionary')
 
     def _compile_sequence(self, schema, seq_type):
         """Validate a sequence type.
@@ -255,7 +345,27 @@ class Schema(object):
         >>> validator([1])
         [1]
         """
-        pass
+        _compile = self._compile
+        seq_schema = [_compile(s) for s in schema]
+
+        def validate_sequence(path, iterable, value):
+            if not isinstance(value, seq_type):
+                raise er.Invalid('expected a {}'.format(seq_type.__name__), path)
+
+            result = []
+            for i, item in enumerate(value):
+                item_path = path + [i]
+                for validator in seq_schema:
+                    try:
+                        result.append(validator(item_path, iterable, item))
+                        break
+                    except er.Invalid:
+                        pass
+                else:
+                    raise er.Invalid('invalid value', item_path)
+            return seq_type(result)
+
+        return validate_sequence
 
     def _compile_tuple(self, schema):
         """Validate a tuple.
@@ -270,7 +380,7 @@ class Schema(object):
         >>> validator((1,))
         (1,)
         """
-        pass
+        return self._compile_sequence(schema, tuple)
 
     def _compile_list(self, schema):
         """Validate a list.
@@ -285,7 +395,7 @@ class Schema(object):
         >>> validator([1])
         [1]
         """
-        pass
+        return self._compile_sequence(schema, list)
 
     def _compile_set(self, schema):
         """Validate a set.
@@ -300,7 +410,26 @@ class Schema(object):
         >>> with raises(er.MultipleInvalid, 'invalid value in set'):
         ...   validator(set(['a']))
         """
-        pass
+        _compile = self._compile
+        set_schema = [_compile(s) for s in schema]
+
+        def validate_set(path, iterable, value):
+            if not isinstance(value, set):
+                raise er.Invalid('expected a set', path)
+
+            result = set()
+            for item in value:
+                for validator in set_schema:
+                    try:
+                        result.add(validator(path, iterable, item))
+                        break
+                    except er.Invalid:
+                        pass
+                else:
+                    raise er.Invalid('invalid value in set', path)
+            return result
+
+        return validate_set
 
     def extend(self, schema: Schemable, required: typing.Optional[bool]=
         None, extra: typing.Optional[int]=None) ->Schema:
@@ -316,7 +445,17 @@ class Schema(object):
         :param required: if set, overrides `required` of this `Schema`
         :param extra: if set, overrides `extra` of this `Schema`
         """
-        pass
+        if not isinstance(self.schema, dict) or not isinstance(schema, dict):
+            raise ValueError("Both schemas must be dictionary-based")
+
+        new_schema = self.schema.copy()
+        new_schema.update(schema)
+
+        return Schema(
+            new_schema,
+            required=self.required if required is None else required,
+            extra=self.extra if extra is None else extra
+        )
 
 
 def _compile_scalar(schema):
