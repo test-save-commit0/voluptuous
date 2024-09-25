@@ -13,7 +13,7 @@ def Lower(v: str) ->str:
     >>> s('HI')
     'hi'
     """
-    pass
+    return v.lower()
 
 
 def Upper(v: str) ->str:
@@ -23,7 +23,7 @@ def Upper(v: str) ->str:
     >>> s('hi')
     'HI'
     """
-    pass
+    return v.upper()
 
 
 def Capitalize(v: str) ->str:
@@ -33,7 +33,7 @@ def Capitalize(v: str) ->str:
     >>> s('hello world')
     'Hello world'
     """
-    pass
+    return v.capitalize()
 
 
 def Title(v: str) ->str:
@@ -43,7 +43,7 @@ def Title(v: str) ->str:
     >>> s('hello world')
     'Hello World'
     """
-    pass
+    return v.title()
 
 
 def Strip(v: str) ->str:
@@ -53,7 +53,7 @@ def Strip(v: str) ->str:
     >>> s('  hello world  ')
     'hello world'
     """
-    pass
+    return v.strip()
 
 
 class DefaultTo(object):
