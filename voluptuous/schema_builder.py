@@ -817,17 +817,31 @@ def message(default: typing.Optional[str]=None, cls: typing.Optional[typing
         ... except er.MultipleInvalid as e:
         ...   assert isinstance(e.errors[0], IntegerInvalid)
     """
-    pass
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            msg = kwargs.pop('msg', None) or default
+            clsoverride = kwargs.pop('clsoverride', None) or cls
+            try:
+                return func(*args, **kwargs)
+            except ValueError as e:
+                raise (clsoverride or er.Invalid)(msg or str(e))
+        return wrapper
+    return decorator
 
 
 def _args_to_dict(func, args):
     """Returns argument names as values as key-value pairs."""
-    pass
+    arg_count = func.__code__.co_argcount
+    arg_names = func.__code__.co_varnames[:arg_count]
+    return dict(zip(arg_names, args))
 
 
 def _merge_args_with_kwargs(args_dict, kwargs_dict):
     """Merge args with kwargs."""
-    pass
+    ret = args_dict.copy()
+    ret.update(kwargs_dict)
+    return ret
 
 
 def validate(*a, **kw) ->typing.Callable:
@@ -846,4 +860,20 @@ def validate(*a, **kw) ->typing.Callable:
         ...   return arg1 * 2
 
     """
-    pass
+    def validate_schema_decorator(func):
+        schema = Schema(kw) if kw else Schema(a[0])
+
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            schema_dict = _merge_args_with_kwargs(_args_to_dict(func, args), kwargs)
+            validated = schema(schema_dict)
+            result = func(**validated)
+            if '__return__' in schema.schema:
+                return_validator = schema.schema['__return__']
+                if isinstance(return_validator, Schema):
+                    return return_validator(result)
+                else:
+                    return Schema(return_validator)(result)
+            return result
+        return wrapper
+    return validate_schema_decorator
